@@ -11,14 +11,28 @@
         .card { background: #1e1e1e; padding: 25px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.7); text-align: center; width: 380px; position: relative; border: 1px solid #333; }
         img { width: 260px; height: 260px; object-fit: contain; background: radial-gradient(#333, #1e1e1e); border-radius: 15px; margin-bottom: 15px; transition: transform 0.2s; }
         img:hover { transform: scale(1.05); }
-        .type { display: inline-block; padding: 5px 12px; border-radius: 20px; margin: 3px; font-weight: bold; font-size: 0.75em; text-transform: uppercase; background: #444; letter-spacing: 1px; }
+        
+        /* Type Bubble Styling */
+        .type { 
+            display: inline-block; 
+            padding: 6px 14px; 
+            border-radius: 20px; 
+            margin: 3px; 
+            font-weight: bold; 
+            font-size: 0.75em; 
+            text-transform: uppercase; 
+            color: white; 
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            letter-spacing: 1px; 
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
         input[type="number"], textarea { width: 100%; padding: 12px; margin-top: 12px; border-radius: 8px; border: 1px solid #444; background: #2a2a2a; color: white; box-sizing: border-box; }
         .controls { margin-top: 25px; display: flex; justify-content: space-between; width: 100%; }
         button { cursor: pointer; padding: 12px 20px; border-radius: 8px; border: none; background: #e3350d; color: white; font-weight: bold; transition: 0.3s; }
         button:hover { background: #ff4500; filter: brightness(1.2); }
         .export-btn { background: #30a7d7; margin-top: 15px; width: 100%; }
         #counter { position: absolute; top: 15px; right: 20px; color: #666; font-size: 0.85em; }
-        .gen-label { font-size: 0.8em; color: #888; margin-bottom: 10px; display: block; }
     </style>
 </head>
 <body>
@@ -65,12 +79,19 @@
 </div>
 
 <script>
-    let masterList = [];   // Full API response
-    let activeList = [];   // The filtered/sorted list being viewed
+    let masterList = [];
+    let activeList = [];
     let currentIndex = 0;
     let userRatings = JSON.parse(localStorage.getItem('pokeRatingsDB')) || {};
 
-    // Generation ranges (National Dex IDs)
+    const typeColors = {
+        normal: '#A8A77A', fire: '#EE8130', water: '#6390F0', electric: '#F7D02C',
+        grass: '#7AC74C', ice: '#96D9D6', fighting: '#C22E28', poison: '#A33EA1',
+        ground: '#E2BF65', flying: '#A98FF3', psychic: '#F95587', bug: '#A6B91A',
+        rock: '#B6A136', ghost: '#735797', dragon: '#6F35FC', steel: '#B7B7CE',
+        fairy: '#D685AD', dark: '#705746'
+    };
+
     const gens = {
         "1": [1, 151], "2": [152, 251], "3": [252, 386], "4": [387, 493], 
         "5": [494, 649], "6": [650, 721], "7": [722, 809], "8": [810, 905], "9": [906, 1025]
@@ -78,12 +99,10 @@
 
     async function init() {
         try {
-            // Fetching main entries and forms
             const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1500');
             const data = await response.json();
             masterList = data.results.map((p, index) => ({
                 ...p,
-                originalIndex: index,
                 id: parseInt(p.url.split('/').filter(Boolean).pop())
             }));
             filterAndSort();
@@ -91,19 +110,17 @@
     }
 
     function filterAndSort() {
-        saveData(); // Save current before switching
+        saveData();
         const gen = document.getElementById('genSelect').value;
         const order = document.getElementById('orderSelect').value;
         const query = document.getElementById('searchBar').value.toLowerCase();
 
-        // 1. Filter by Gen and Search
         activeList = masterList.filter(p => {
             const matchesSearch = p.name.includes(query);
             if (gen === "all") return matchesSearch;
             return p.id >= gens[gen][0] && p.id <= gens[gen][1] && matchesSearch;
         });
 
-        // 2. Sort/Shuffle
         if (order === "rand") {
             activeList.sort(() => Math.random() - 0.5);
         } else {
@@ -129,7 +146,12 @@
         document.getElementById('poke-name').innerText = details.name.replace(/-/g, ' ');
         document.getElementById('poke-id').innerText = `#${details.id}`;
         document.getElementById('poke-img').src = details.sprites.other['official-artwork'].front_default || details.sprites.front_default;
-        document.getElementById('poke-types').innerHTML = details.types.map(t => `<span class="type">${t.type.name}</span>`).join('');
+        
+        // Apply color coding here
+        document.getElementById('poke-types').innerHTML = details.types.map(t => {
+            const color = typeColors[t.type.name] || '#777';
+            return `<span class="type" style="background-color: ${color}">${t.type.name}</span>`;
+        }).join('');
 
         const saved = userRatings[details.name] || { score: '', note: '' };
         document.getElementById('score').value = saved.score;
