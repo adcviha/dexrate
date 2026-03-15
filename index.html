@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PokéDesign Ranker</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px;}
+        .card { background: #2a2a2a; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; width: 350px; position: relative; }
+        img { width: 250px; height: 250px; object-fit: contain; background: #333; border-radius: 10px; margin-bottom: 15px; }
+        .info { margin-bottom: 20px; }
+        .type { display: inline-block; padding: 5px 10px; border-radius: 5px; margin: 2px; font-weight: bold; font-size: 0.8em; text-transform: uppercase; background: #555; }
+        input, textarea { width: 100%; padding: 10px; margin-top: 10px; border-radius: 5px; border: none; box-sizing: border-box; font-family: inherit; }
+        .controls { margin-top: 20px; display: flex; justify-content: space-between; width: 100%; }
+        button { cursor: pointer; padding: 10px 15px; border-radius: 5px; border: none; background: #e3350d; color: white; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #b32a0a; }
+        .export-btn { background: #30a7d7; margin-top: 20px; width: 100%; }
+        .export-btn:hover { background: #2685ab; }
+        .stats { margin-top: 15px; color: #aaa; font-size: 0.85em; }
+        #counter { position: absolute; top: 15px; right: 15px; color: #888; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div id="counter">0 / 0</div>
+    <div id="poke-id" style="color: #888; font-weight: bold; margin-bottom: 5px;">#---</div>
+    <h2 id="poke-name" style="margin-top: 0; text-transform: capitalize;">Loading Database...</h2>
+    <img id="poke-img" src="" alt="Pokemon Sprite" onerror="this.src='https://via.placeholder.com/250?text=No+Image'">
+    <div id="poke-types"></div>
+    
+    <div class="info">
+        <label for="score">Design Score (1-100):</label>
+        <input type="number" id="score" min="1" max="100" placeholder="Enter score...">
+        <textarea id="note" rows="3" placeholder="Add a note about the design..."></textarea>
+    </div>
+
+    <div class="controls">
+        <button onclick="prevPoke()">⬅ Back</button>
+        <button onclick="saveData()">Save</button>
+        <button onclick="nextPoke()">Next ➡</button>
+    </div>
+    
+    <button class="export-btn" onclick="exportCSV()">⬇ Download Scores to CSV</button>
+    
+    <div class="stats">
+        <strong>Shortcuts:</strong> Left/Right Arrows = Navigate | Enter = Score Box
+    </div>
+</div>
+
+<script>
+    let pokemonList = [];
+    let currentIndex = 0;
+    let userRatings = JSON.parse(localStorage.getItem('pokeRatingsDB')) || {};
+
+    // 1. Fetch the entire list of Pokemon and Forms
+    async function initPokedex() {
+        try {
+            // Limit 1500 captures all base Pokemon + all alternate forms currently in the API
+            const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1500');
+            const data = await response.json();
+            pokemonList = data.results;
+            updateDisplay();
+        } catch (error) {
+            document.getElementById('poke-name').innerText = "Error loading data!";
+        }
+    }
+
+    // 2. Fetch specific details for the current Pokemon
+    async function updateDisplay() {
+        if (pokemonList.length === 0) return;
+        
+        const pokeBasic = pokemonList[currentIndex];
+        document.getElementById('poke-name').innerText = "Loading...";
+        document.getElementById('counter').innerText = `${currentIndex + 1} / ${pokemonList.length}`;
+        
+        try {
+            const res = await fetch(pokeBasic.url);
+            const pokeDetails = await res.json();
+
+            // Format name cleanly
+            let cleanName = pokeDetails.name.replace(/-/g, ' ');
+            document.getElementById('poke-name').innerText = cleanName;
+            document.getElementById('poke-id').innerText = `#${pokeDetails.id}`;
+            
+            // Get Official Art (Fallback to default sprite if official art is missing)
+            const artUrl = pokeDetails.sprites.other['official-artwork'].front_default || pokeDetails.sprites.front_default;
+            document.getElementById('poke-img').src = artUrl;
+
+            // Types
+            const typesHtml = pokeDetails.types.map(t => `<span class="type">${t.type.name}</span>`).join('');
+            document.getElementById('poke-types').innerHTML = typesHtml;
+
+            // Load saved data using the Pokemon's unique string name as the key
+            const saved = userRatings[pokeDetails.name] || { score: '', note: '' };
+            document.getElementById('score').value = saved.score;
+            document.getElementById('note').value = saved.note;
+            
+        } catch (error) {
+            console.error("Failed to fetch details", error);
+        }
+    }
+
+    function saveData() {
+        if (pokemonList.length === 0) return;
+        const currentName = pokemonList[currentIndex].name;
+        userRatings[currentName] = {
+            score: document.getElementById('score').value,
+            note: document.getElementById('note').value
+        };
+        localStorage.setItem('pokeRatingsDB', JSON.stringify(userRatings));
+    }
+
+    function nextPoke() { 
+        saveData(); 
+        if(currentIndex < pokemonList.length - 1) { 
+            currentIndex++; 
+            updateDisplay(); 
+        } 
+    }
+    
+    function prevPoke() { 
+        saveData(); 
+        if(currentIndex > 0) { 
+            currentIndex--; 
+            updateDisplay(); 
+        } 
+    }
+
+    // 3. Export to CSV for later collation
+    function exportCSV() {
+        saveData();
+        let csvContent = "data:text/csv;charset=utf-8,Pokemon_API_Name,Score,Note\n";
+        
+        for (const [name, data] of Object.entries(userRatings)) {
+            // Clean up notes to avoid breaking CSV format (remove commas/newlines)
+            let cleanNote = data.note.replace(/,/g, ';').replace(/\n/g, ' ');
+            csvContent += `${name},${data.score},${cleanNote}\n`;
+        }
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "pokemon_design_rankings.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+        const activeTag = document.activeElement.tagName.toLowerCase();
+        if (activeTag === 'textarea') return; // Don't trigger if typing a note
+        
+        if (e.key === "ArrowRight") nextPoke();
+        if (e.key === "ArrowLeft") prevPoke();
+        if (e.key === "Enter") document.getElementById('score').focus();
+    });
+
+    // Start the app
+    initPokedex();
+</script>
+</body>
+</html>
